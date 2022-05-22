@@ -32,12 +32,10 @@ void TaskScheduler::addTask(std::shared_ptr<Task> task, int delayMs, bool repeat
 
 void TaskScheduler::stop()
 {
-    if (_stop)
+    if (_stop.exchange(true))
     {
         return;
     }
-
-    _stop = true;
 
     _tasksCv.notify_all();
 
