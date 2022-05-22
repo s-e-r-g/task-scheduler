@@ -1,8 +1,9 @@
 #pragma once
 
+#include <condition_variable>
 #include <chrono>
-#include <memory>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <thread>
@@ -30,6 +31,7 @@ private:
 private:
     std::atomic<bool> _stop = false;
     std::mutex _tasksMutex;
+    std::condition_variable _tasksCv;
     // TODO: probably, std:make_heap can be used instead of map (check performance)
     std::multimap<std::chrono::time_point<std::chrono::steady_clock>, TaskInfo> _tasks;
     std::vector<std::thread> _executors;

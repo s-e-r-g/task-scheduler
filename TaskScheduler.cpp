@@ -19,11 +19,14 @@ TaskScheduler::~TaskScheduler()
 
 void TaskScheduler::addTask(std::shared_ptr<Task> task, int delayMs, bool repeatable)
 {
-    std::lock_guard<std::mutex> guard(_tasksMutex);
-    const auto expectedExecutionTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
+    {
+        std::unique_lock<std::mutex> lock(_tasksMutex);
+        const auto expectedExecutionTime = std::chrono::steady_clock::now() + std::chrono::milliseconds(delayMs);
 
-    TaskInfo info{std::move(task), repeatable ? std::optional<int>{delayMs} : std::optional<int>{}};
-    _tasks.emplace(expectedExecutionTime, std::move(info));
+        TaskInfo info{std::move(task), repeatable ? std::optional<int>{delayMs} : std::optional<int>{}};
+        _tasks.emplace(expectedExecutionTime, std::move(info));
+    }
+    _tasksCv.notify_all();
 }
 
 
@@ -35,6 +38,8 @@ void TaskScheduler::stop()
     }
 
     _stop = true;
+
+    _tasksCv.notify_all();
 
     // wait for all threads
     for (auto& executor : _executors)
@@ -50,12 +55,12 @@ void TaskScheduler::taskExecutor()
     while (!_stop)
     {
         {
-            std::lock_guard<std::mutex> guard(_tasksMutex);
+            std::unique_lock<std::mutex> lock(_tasksMutex);
             auto top = _tasks.begin();
             if (top == _tasks.end())
             {
-                // TODO: Optimization can be added:
-                //       - wait for task in queue here?
+                // Optimization: wait for task in queue here or for stop (notify_all is called in stop())
+                _tasksCv.wait(lock);
                 continue;
             }
 
@@ -63,8 +68,8 @@ void TaskScheduler::taskExecutor()
             const auto currentTime = std::chrono::steady_clock::now();
             if (expectedExecutionTime > currentTime)
             {
-                // TODO: Optimization can be added:
-                //       - wait for task OR for specific amount of time till the next task
+                // Optimization: wait for task OR for specific amount of time till the top task
+                _tasksCv.wait_for(lock, expectedExecutionTime - currentTime); // TODO: threshold should be added here
                 continue;
             }
 
