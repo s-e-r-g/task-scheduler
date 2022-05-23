@@ -26,7 +26,7 @@ void TaskScheduler::addTask(std::shared_ptr<Task> task, int delayMs, bool repeat
         TaskInfo info{std::move(task), repeatable ? std::optional<int>{delayMs} : std::optional<int>{}};
         _tasks.emplace(expectedExecutionTime, std::move(info));
     }
-    _tasksCv.notify_all();
+    _tasksCv.notify_one();
 }
 
 
